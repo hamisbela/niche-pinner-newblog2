@@ -964,6 +964,37 @@ export const BlogPreview: React.FC = () => {
 };
 
 /**
+ * Direct YouTube embed component for better rendering
+ */
+const YouTubeEmbed: React.FC<{ id: string }> = ({ id }) => {
+  return (
+    <div className="aspect-w-16 mb-6">
+      <iframe
+        src={`https://www.youtube.com/embed/${id}`}
+        title="YouTube video player"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+        allowFullScreen
+        className="w-full h-full absolute top-0 left-0"
+      ></iframe>
+    </div>
+  );
+};
+
+/**
+ * Custom component to process and render YouTube embed tags
+ */
+const YouTubeEmbedProcessor: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  // Check if this contains our YouTube embed tag
+  if (typeof children === 'string' && children.includes('<youtube-embed')) {
+    const match = children.match(/id="([a-zA-Z0-9_-]{11})"/);
+    if (match && match[1]) {
+      return <YouTubeEmbed id={match[1]} />;
+    }
+  }
+  return <p className="mb-6">{children}</p>;
+};
+
+/**
  * BlogPost Component
  * Displays a single blog post
  */
@@ -997,31 +1028,25 @@ export const BlogPost: React.FC = () => {
       });
   }, [slug]);
 
-  // Custom YouTube renderer
-  const YouTubeEmbed = ({ id }: { id: string }) => (
-    <div className="aspect-w-16 mb-6">
-      <iframe
-        src={`https://www.youtube.com/embed/${id}`}
-        title="YouTube video player"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-        allowFullScreen
-        className="w-full h-full absolute top-0 left-0"
-      ></iframe>
-    </div>
-  );
-
-  // Custom Markdown renderer
+  /**
+   * Custom Markdown renderer
+   */
   const MarkdownRenderer = ({ content }: { content: string }) => {
-    // Process YouTube embeds
+    // Process content
     let processedContent = content;
     
-    // Remove the first heading to avoid duplication with the post title
+    // Remove the first h1 heading to avoid duplication with the post title
     const headingRegex = /^#\s+(.+)$/m;
     const headingMatch = content.match(headingRegex);
     if (headingMatch && headingMatch[0]) {
       processedContent = processedContent.replace(headingMatch[0], '');
     }
     
+    // Process YouTube embeds
+    const youtubeProcessed = processedContent.replace(/youtube:([a-zA-Z0-9_-]{11})/g, (match, id) => {
+      return `<youtube-embed id="${id}"></youtube-embed>`;
+    });
+
     return (
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
@@ -1046,23 +1071,12 @@ export const BlogPost: React.FC = () => {
             <img 
               src={src} 
               alt={alt || ''} 
-              className="my-6 rounded-lg mx-auto max-h-[600px] object-contain" 
+              className="my-6 rounded-lg mx-auto max-h-[600px] w-auto object-contain" 
               {...props} 
             />
           ),
           // Process youtube embed tags
-          p: ({ children }) => {
-            // Check if this paragraph has our YouTube embed tag
-            if (typeof children === 'string' && children.includes('<youtube-embed')) {
-              const match = children.match(/id="([a-zA-Z0-9_-]{11})"/);
-              if (match && match[1]) {
-                return <YouTubeEmbed id={match[1]} />;
-              }
-            }
-            
-            // Regular paragraph
-            return <p className="mb-6">{children}</p>;
-          },
+          p: YouTubeEmbedProcessor,
           // Handle headings
           h1: ({ children }) => <h1 className="text-3xl font-bold mb-6 mt-10">{children}</h1>,
           h2: ({ children }) => <h2 className="text-2xl font-bold mb-4 mt-8">{children}</h2>,
@@ -1093,9 +1107,7 @@ export const BlogPost: React.FC = () => {
           ),
         }}
       >
-        {processedContent.replace(/youtube:([a-zA-Z0-9_-]{11})/g, (match, id) => {
-          return `<youtube-embed id="${id}"></youtube-embed>`;
-        })}
+        {youtubeProcessed}
       </ReactMarkdown>
     );
   };
@@ -1175,7 +1187,7 @@ export const BlogPost: React.FC = () => {
         {/* Featured image */}
         {post.featuredImage && (
           <div 
-            className="w-full h-64 md:h-96 bg-cover bg-center object-cover"
+            className="w-full h-64 md:h-96 bg-cover bg-center object-contain"
             style={{ backgroundImage: `url(${post.featuredImage})` }}
           ></div>
         )}
