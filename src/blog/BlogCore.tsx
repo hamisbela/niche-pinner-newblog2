@@ -964,34 +964,31 @@ export const BlogPreview: React.FC = () => {
 };
 
 /**
- * Direct YouTube embed component for better rendering
+ * YouTube Embed Component
  */
-const YouTubeEmbed: React.FC<{ id: string }> = ({ id }) => {
-  return (
-    <div className="aspect-w-16 mb-6">
+const YouTubeEmbed = ({ id }: { id: string }) => (
+  <div className="youtube-embed-container my-6">
+    <div className="aspect-w-16">
       <iframe
         src={`https://www.youtube.com/embed/${id}`}
         title="YouTube video player"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         allowFullScreen
-        className="w-full h-full absolute top-0 left-0"
+        className="border-0 w-full h-full absolute top-0 left-0 rounded-lg"
       ></iframe>
     </div>
-  );
-};
+  </div>
+);
 
 /**
- * Custom component to process and render YouTube embed tags
+ * Custom component to handle YouTube embeds in markdown
  */
-const YouTubeEmbedProcessor: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // Check if this contains our YouTube embed tag
-  if (typeof children === 'string' && children.includes('<youtube-embed')) {
-    const match = children.match(/id="([a-zA-Z0-9_-]{11})"/);
-    if (match && match[1]) {
-      return <YouTubeEmbed id={match[1]} />;
-    }
-  }
-  return <p className="mb-6">{children}</p>;
+const YouTubeEmbedProcessor = ({ content }: { content: string }) => {
+  // Extract YouTube ID
+  const match = content.match(/youtube-embed id="([^"]+)"/);
+  if (!match) return null;
+  
+  return <YouTubeEmbed id={match[1]} />;
 };
 
 /**
@@ -1028,24 +1025,18 @@ export const BlogPost: React.FC = () => {
       });
   }, [slug]);
 
-  /**
-   * Custom Markdown renderer
-   */
+  // Custom Markdown renderer
   const MarkdownRenderer = ({ content }: { content: string }) => {
-    // Process content
-    let processedContent = content;
-    
-    // Remove the first h1 heading to avoid duplication with the post title
-    const headingRegex = /^#\s+(.+)$/m;
-    const headingMatch = content.match(headingRegex);
-    if (headingMatch && headingMatch[0]) {
-      processedContent = processedContent.replace(headingMatch[0], '');
+    // Check for YouTube embed tag in the content
+    if (content.includes('<youtube-embed')) {
+      return <YouTubeEmbedProcessor content={content} />;
     }
-    
+
     // Process YouTube embeds
-    const youtubeProcessed = processedContent.replace(/youtube:([a-zA-Z0-9_-]{11})/g, (match, id) => {
-      return `<youtube-embed id="${id}"></youtube-embed>`;
-    });
+    const processedContent = content.replace(
+      /youtube:([a-zA-Z0-9_-]{11})/g, 
+      (match, id) => `<youtube-embed id="${id}"></youtube-embed>`
+    );
 
     return (
       <ReactMarkdown
@@ -1075,8 +1066,17 @@ export const BlogPost: React.FC = () => {
               {...props} 
             />
           ),
-          // Process youtube embed tags
-          p: YouTubeEmbedProcessor,
+          // Handle paragraphs that might contain YouTube embeds
+          p: ({ node, children }) => {
+            if (
+              node?.children[0]?.type === 'text' && 
+              typeof node.children[0].value === 'string' && 
+              node.children[0].value.includes('<youtube-embed')
+            ) {
+              return <YouTubeEmbedProcessor content={node.children[0].value} />;
+            }
+            return <p className="mb-6">{children}</p>;
+          },
           // Handle headings
           h1: ({ children }) => <h1 className="text-3xl font-bold mb-6 mt-10">{children}</h1>,
           h2: ({ children }) => <h2 className="text-2xl font-bold mb-4 mt-8">{children}</h2>,
@@ -1107,7 +1107,7 @@ export const BlogPost: React.FC = () => {
           ),
         }}
       >
-        {youtubeProcessed}
+        {processedContent}
       </ReactMarkdown>
     );
   };
@@ -1187,9 +1187,15 @@ export const BlogPost: React.FC = () => {
         {/* Featured image */}
         {post.featuredImage && (
           <div 
-            className="w-full h-64 md:h-96 bg-cover bg-center object-contain"
+            className="w-full max-h-96 overflow-hidden bg-center object-contain"
             style={{ backgroundImage: `url(${post.featuredImage})` }}
-          ></div>
+          >
+            <img 
+              src={post.featuredImage} 
+              alt={post.title} 
+              className="w-full h-auto max-h-96 object-contain"
+            />
+          </div>
         )}
 
         <div className="p-6 md:p-8">
@@ -1227,7 +1233,12 @@ export const BlogPost: React.FC = () => {
 
           {/* Post content */}
           <div className="prose prose-lg max-w-none">
-            <MarkdownRenderer content={post.content} />
+            {post.content.split(/(<youtube-embed[^>]*>)/).map((part, index) => {
+              if (part.startsWith('<youtube-embed')) {
+                return <YouTubeEmbedProcessor key={index} content={part} />;
+              }
+              return <MarkdownRenderer key={index} content={part} />;
+            })}
           </div>
 
           {/* Post footer */}
