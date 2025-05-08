@@ -1005,6 +1005,7 @@ export const BlogPost: React.FC = () => {
         title="YouTube video player"
         allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
         allowFullScreen
+        className="w-full h-full absolute top-0 left-0"
       ></iframe>
     </div>
   );
@@ -1012,11 +1013,15 @@ export const BlogPost: React.FC = () => {
   // Custom Markdown renderer
   const MarkdownRenderer = ({ content }: { content: string }) => {
     // Process YouTube embeds
-    const processedContent = content.replace(/youtube:([a-zA-Z0-9_-]{11})/g, (match, id) => {
-      // Replace with a custom placeholder that we can render differently
-      return `<youtube-embed id="${id}"></youtube-embed>`;
-    });
-
+    let processedContent = content;
+    
+    // Remove the first heading to avoid duplication with the post title
+    const headingRegex = /^#\s+(.+)$/m;
+    const headingMatch = content.match(headingRegex);
+    if (headingMatch && headingMatch[0]) {
+      processedContent = processedContent.replace(headingMatch[0], '');
+    }
+    
     return (
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
@@ -1045,15 +1050,17 @@ export const BlogPost: React.FC = () => {
               {...props} 
             />
           ),
-          // Custom renderer for YouTube embeds
-          p: ({ node, children }) => {
-            // Check if this paragraph contains a YouTube embed placeholder
+          // Process youtube embed tags
+          p: ({ children }) => {
+            // Check if this paragraph has our YouTube embed tag
             if (typeof children === 'string' && children.includes('<youtube-embed')) {
               const match = children.match(/id="([a-zA-Z0-9_-]{11})"/);
               if (match && match[1]) {
                 return <YouTubeEmbed id={match[1]} />;
               }
             }
+            
+            // Regular paragraph
             return <p className="mb-6">{children}</p>;
           },
           // Handle headings
@@ -1086,7 +1093,9 @@ export const BlogPost: React.FC = () => {
           ),
         }}
       >
-        {processedContent}
+        {processedContent.replace(/youtube:([a-zA-Z0-9_-]{11})/g, (match, id) => {
+          return `<youtube-embed id="${id}"></youtube-embed>`;
+        })}
       </ReactMarkdown>
     );
   };
